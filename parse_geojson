@@ -1,0 +1,67 @@
+<?php
+
+function parse_geojson_puntos($consulta, $conexion, $configfeature) {
+/*
+$consulta Select
+$conexion Debe ya estar conectado perfectamente usando MySQLi
+$configfeature Debe ser un array que me permita generar las properties del geojson
+    $configfeature['latitud'] - Float
+    $configfeature['longitud'] - Float
+    $configfeature['contenidoPopup'] - array con el formato texto - campo - texto - campo
+          Ejemplo: [0] => "", [1] => "NOMBRE", [2] => " - ", [3] => "APELLIDOS"
+    $configfeature['propiedades'] - array asociativo clave - valor, la clave será el nombre
+         de la propiedad, el valor será el nombre del campo de la BD
+
+  Esta función no comprueba nada sobre los campos. Si no existen en la consulta, va a dar fallo.
+  En una versión posterior habrá que arreglar esto.
+*/
+
+$dbquery = $conexion->query($consulta);
+if(! $dbquery )
+{
+  die('Could not get data: ' . mysql_error());
+}
+
+$feature=array();
+$geojson = array(
+    'type'      => 'FeatureCollection',
+    'bbox'=>  [-179.9998779296875,-90,180,83.64508056640625],
+    'features'  => $feature
+ );
+
+while($row = $dbquery->fetch_assoc()) {
+
+// En el siguiente código, para este registro de la consulta, genero el contenidoPopup
+  $cpopup = "";
+  foreach ($configfeature['contenidoPopup'] as $clave => $valor){
+    if ($clave % 2 == 0){ // Es texto
+      $cpopup = $cpopup . $valor;
+    }else{  // Es campo
+      $cpopup = $cpopup . $row[$valor];
+    }
+  }
+
+ // Defino la feature correspondiente a la fila actual de la consulta. El tipo es Point
+    $feature = array(
+        'type' => 'Feature',
+        'geometry' => array(
+        'type' => 'Point',
+        'coordinates' => array((float)$row[$configfeature['latitud']], (float)$row[$configfeature['longitud']])
+            ),
+
+      'properties' => array(
+            'contenidoPopup' => $cpopup
+            )
+        );
+  // Añado todas las propiedades además de contenidoPopup
+    foreach ($configfeature['propiedades'] as $clave => $valor){
+      $feature['properties'][$clave] = $row[$valor];
+    }
+
+    array_push($geojson['features'], $feature);
+};
+return $geojson;
+}
+
+
+?>
